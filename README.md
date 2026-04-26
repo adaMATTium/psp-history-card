@@ -2,8 +2,6 @@
 
 A Home Assistant custom card for displaying [Ameren Power Smart Pricing](https://www.ameren.com/bill/rates/power-smart-pricing) hourly price history with interactive date navigation.
 
-![PSP Price History Card](https://raw.githubusercontent.com/mwinner86/ha-psp-history-card/main/screenshot.png)
-
 ## Features
 
 - Bar chart of hourly PSP prices for any past date
@@ -13,11 +11,17 @@ A Home Assistant custom card for displaying [Ameren Power Smart Pricing](https:/
 - "Updating..." overlay while data loads
 - Fully configurable entity IDs
 
+## Dependencies
+
+This card requires [apexcharts-card](https://github.com/RomRider/apexcharts-card) by RomRider to be installed. It does not bundle ApexCharts itself — instead it uses the `window.ApexCharts` instance that `apexcharts-card` loads. Install `apexcharts-card` via HACS before using this card.
+
 ## Prerequisites
 
-This card requires:
+Beyond `apexcharts-card`, you will need the following set up in Home Assistant:
 
-1. A REST sensor in `rest.yaml` that fetches hourly prices from Ameren:
+### 1. REST sensor (`rest.yaml`)
+
+Fetches hourly prices from Ameren for the selected date:
 
 ```yaml
 - resource: 'https://www.ameren.com/api/ameren/promotion/RtpHourlyPricesbyDate'
@@ -34,11 +38,15 @@ This card requires:
         - hourlyPriceDetails
 ```
 
-2. An `input_datetime` helper (date only, no time) — create it in **Settings > Devices & Services > Helpers**:
-   - Name: `RTP Graph Date`
-   - Type: Date
+### 2. Input datetime helper
 
-3. An automation that refreshes the sensor when the date changes:
+Create a date-only (no time) helper in **Settings > Devices & Services > Helpers**:
+- Name: `RTP Graph Date`
+- Type: Date and/or time — select **Date** only
+
+### 3. Automation
+
+Refreshes the sensor whenever the selected date changes:
 
 ```yaml
 alias: Update RTP Graph Feed
@@ -56,15 +64,13 @@ actions:
 mode: single
 ```
 
-4. [apexcharts-card](https://github.com/RomRider/apexcharts-card) installed via HACS (the PSP card uses the ApexCharts library bundled with it)
-
 ## Installation via HACS
 
 1. In HACS, go to **Frontend**
 2. Click the three-dot menu > **Custom repositories**
-3. Add `https://github.com/mwinner86/ha-psp-history-card` with category **Lovelace**
+3. Add `https://github.com/adaMATTium/psp-history-card/` with type **Dashboard**
 4. Install **PSP Price History Card**
-5. Add a resource entry pointing to the installed file (HACS does this automatically)
+5. HACS will register the resource automatically
 
 ## Manual Installation
 
@@ -82,8 +88,18 @@ datetime: input_datetime.rtp_graph_date
 title: PSP Price History   # optional
 ```
 
-| Option     | Required | Default              | Description                                        |
-|------------|----------|----------------------|----------------------------------------------------|
-| `sensor`   | Yes      | —                    | Entity ID of the REST sensor with `hourlyPriceDetails` |
-| `datetime` | Yes      | —                    | Entity ID of the `input_datetime` date helper      |
-| `title`    | No       | `PSP Price History`  | Card title                                         |
+| Option     | Required | Default             | Description                                              |
+|------------|----------|---------------------|----------------------------------------------------------|
+| `sensor`   | Yes      | —                   | Entity ID of the REST sensor with `hourlyPriceDetails`   |
+| `datetime` | Yes      | —                   | Entity ID of the `input_datetime` date helper            |
+| `title`    | No       | `PSP Price History` | Card title                                               |
+
+## Notes
+
+- Historical data availability depends on your REST sensor's `scan_interval` and HA recorder retention. The card only shows data for dates that have been fetched by the sensor — it does not fetch historical data itself.
+- Dates in the future are blocked by the date picker and navigation buttons.
+- The card is designed for Ameren Illinois PSP customers but could be adapted for any hourly pricing sensor that exposes an `hourlyPriceDetails` attribute array with `price` values in $/kWh.
+
+## License
+
+MIT
