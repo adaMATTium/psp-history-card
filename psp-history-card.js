@@ -15,6 +15,13 @@ function pspColorFor(v) {
 var PSP_HL = ['12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a',
               '12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'];
 
+var PSP_LEGEND_ITEMS = [
+  { color: '#16a34a', label: '<2¢' },
+  { color: '#ffc000', label: '2-8¢' },
+  { color: '#f97316', label: '8-12¢' },
+  { color: '#dc2626', label: '>12¢' },
+];
+
 function pspWaitApex(ms) {
   return new Promise(function(res, rej) {
     var d = Date.now() + ms;
@@ -35,6 +42,23 @@ function pspTodaySv() {
   return d.getFullYear() + '-' +
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
+}
+
+function pspBuildLegend() {
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;justify-content:center;align-items:center;gap:12px;font-size:11px;color:var(--primary-text-color);margin-top:6px;flex-wrap:wrap';
+  PSP_LEGEND_ITEMS.forEach(function(item) {
+    var row = document.createElement('span');
+    row.style.cssText = 'display:inline-flex;align-items:center;gap:4px';
+    var sw = document.createElement('span');
+    sw.style.cssText = 'display:inline-block;width:10px;height:10px;background:' + item.color + ';border-radius:2px';
+    var tx = document.createElement('span');
+    tx.textContent = item.label;
+    row.appendChild(sw);
+    row.appendChild(tx);
+    wrap.appendChild(row);
+  });
+  return wrap;
 }
 
 class PspHistoryCard extends HTMLElement {
@@ -182,10 +206,10 @@ class PspHistoryCard extends HTMLElement {
     nav.appendChild(nextBtn);
 
     var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:relative;width:100%;min-height:300px';
+    wrapper.style.cssText = 'position:relative;width:100%;height:300px';
 
     this._chartEl = document.createElement('div');
-    this._chartEl.style.cssText = 'width:100%;min-height:300px;transition:opacity 0.2s';
+    this._chartEl.style.cssText = 'width:100%;height:300px;transition:opacity 0.2s';
 
     this._overlayEl = document.createElement('div');
     this._overlayEl.style.cssText = 'display:none;position:absolute;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center;font-size:13px;color:var(--primary-text-color);pointer-events:none';
@@ -194,9 +218,12 @@ class PspHistoryCard extends HTMLElement {
     wrapper.appendChild(this._chartEl);
     wrapper.appendChild(this._overlayEl);
 
+    var legend = pspBuildLegend();
+
     card.appendChild(titleEl);
     card.appendChild(nav);
     card.appendChild(wrapper);
+    card.appendChild(legend);
     this.appendChild(card);
 
     this._updateDateDisplay(this._currentDateSv());
@@ -218,13 +245,19 @@ class PspHistoryCard extends HTMLElement {
       chart: {
         type: 'bar',
         height: 300,
+        parentHeightOffset: 0,
         toolbar: { show: false },
         background: 'transparent',
         animations: { enabled: false },
-        foreColor: 'var(--primary-text-color)',
       },
       colors: colors.length ? colors : ['#16a34a'],
       plotOptions: { bar: { columnWidth: '85%', borderRadius: 2, distributed: true } },
+      fill: { opacity: 1 },
+      states: {
+        normal: { filter: { type: 'none' } },
+        hover: { filter: { type: 'none' } },
+        active: { filter: { type: 'none' } },
+      },
       dataLabels: { enabled: false },
       legend: { show: false },
       xaxis: {
@@ -233,16 +266,12 @@ class PspHistoryCard extends HTMLElement {
         axisBorder: { show: false },
         axisTicks: { show: false },
       },
-      yaxis: { min: 0, decimalsInFloat: 1 },
-      grid: { strokeDashArray: 4, padding: { bottom: 24 } },
+      yaxis: {
+        min: 0,
+        labels: { formatter: function(v) { return v.toFixed(1); } },
+      },
+      grid: { strokeDashArray: 4 },
       tooltip: { theme: 'dark', y: { formatter: function(v) { return v.toFixed(2) + ' c/kWh'; } } },
-      annotations: { texts: [{
-        x: '50%',
-        y: 300,
-        text: '\uD83D\uDFE9 <2\u00A2 | \uD83D\uDFE8 2-8\u00A2 | \uD83D\uDFE7 8-12\u00A2 | \uD83D\uDFE5 >12\u00A2',
-        textAnchor: 'middle',
-        style: { fontSize: '11px', color: 'var(--primary-text-color)', background: 'transparent' },
-      }]},
       theme: { mode: 'dark' },
     };
     if (this._chart) { this._chart.destroy(); this._chart = null; }
