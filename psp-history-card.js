@@ -3,17 +3,17 @@
  * A Home Assistant custom card for displaying Ameren PSP hourly price history.
  *
  * Config options:
- *   sensor:   entity_id of the REST sensor providing hourlyPriceDetails (required)
- *   datetime: entity_id of the input_datetime helper used to select the date (required)
- *   title:    card title (optional, default: "PSP Price History")
+ *   sensor:   entity_id of the REST sensor providing hourlyPriceDetails (default: sensor.rtp_graph_feed)
+ *   datetime: entity_id of the input_datetime helper used to select the date (default: input_datetime.rtp_graph_date)
+ *   title:    card title (default: "PSP Price History")
  */
 
 function pspColorFor(v) {
   return v >= 12 ? '#dc2626' : v >= 8 ? '#f97316' : v >= 2 ? '#ffc000' : '#16a34a';
 }
 
-var PSP_HL = ['1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a','12p',
-              '1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p','12a'];
+var PSP_HL = ['12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a',
+              '12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'];
 
 function pspWaitApex(ms) {
   return new Promise(function(res, rej) {
@@ -26,23 +26,15 @@ function pspWaitApex(ms) {
   });
 }
 
+function pspWaitFrame() {
+  return new Promise(function(res) { requestAnimationFrame(res); });
+}
+
 function pspTodaySv() {
   var d = new Date();
   return d.getFullYear() + '-' +
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
-}
-
-function pspFmtDate(sv) {
-  var d = new Date(sv + 'T12:00:00');
-  var today = pspTodaySv();
-  var yest = new Date(Date.now() - 86400000);
-  var yestSv = yest.getFullYear() + '-' +
-    String(yest.getMonth() + 1).padStart(2, '0') + '-' +
-    String(yest.getDate()).padStart(2, '0');
-  if (sv === today) return 'Today';
-  if (sv === yestSv) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 class PspHistoryCard extends HTMLElement {
@@ -59,10 +51,6 @@ class PspHistoryCard extends HTMLElement {
     this._config = {};
   }
 
-  static getConfigElement() {
-    return document.createElement('psp-history-card-editor');
-  }
-
   static getStubConfig() {
     return {
       sensor: 'sensor.rtp_graph_feed',
@@ -72,9 +60,11 @@ class PspHistoryCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.sensor) throw new Error('PSP History Card: "sensor" is required');
-    if (!config.datetime) throw new Error('PSP History Card: "datetime" is required');
-    this._config = Object.assign({ title: 'PSP Price History' }, config);
+    this._config = Object.assign({
+      sensor: 'sensor.rtp_graph_feed',
+      datetime: 'input_datetime.rtp_graph_date',
+      title: 'PSP Price History',
+    }, config || {});
   }
 
   set hass(h) {
@@ -97,7 +87,8 @@ class PspHistoryCard extends HTMLElement {
     var s = this._hass && this._hass.states[this._config.sensor];
     var d = s && s.attributes && s.attributes.hourlyPriceDetails;
     if (!d || !d.length) return [];
-    return d.map(function(i) {
+    var sorted = d.slice().sort(function(a, b) { return parseInt(a.hour) - parseInt(b.hour); });
+    return sorted.map(function(i) {
       return parseFloat((parseFloat(i.price || 0) * 100).toFixed(2));
     });
   }
@@ -191,29 +182,26 @@ class PspHistoryCard extends HTMLElement {
     nav.appendChild(nextBtn);
 
     var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:relative;width:100%;min-height:260px';
+    wrapper.style.cssText = 'position:relative;width:100%;min-height:300px';
 
     this._chartEl = document.createElement('div');
-    this._chartEl.style.cssText = 'width:100%;min-height:260px;transition:opacity 0.2s';
+    this._chartEl.style.cssText = 'width:100%;min-height:300px;transition:opacity 0.2s';
 
     this._overlayEl = document.createElement('div');
-    this._overlayEl.style.cssText = 'display:none;position:absolute;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center;font-size:13px;color:var(--secondary-text-color);pointer-events:none';
+    this._overlayEl.style.cssText = 'display:none;position:absolute;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center;font-size:13px;color:var(--primary-text-color);pointer-events:none';
     this._overlayEl.textContent = 'Updating...';
 
     wrapper.appendChild(this._chartEl);
     wrapper.appendChild(this._overlayEl);
 
-    var legend = document.createElement('div');
-    legend.style.cssText = 'font-size:11px;color:var(--secondary-text-color);text-align:center;margin-top:6px';
-    legend.textContent = '\uD83D\uDFE9 <2\u00A2 | \uD83D\uDFE8 2-8\u00A2 | \uD83D\uDFE7 8-12\u00A2 | \uD83D\uDFE5 >12\u00A2';
-
     card.appendChild(titleEl);
     card.appendChild(nav);
     card.appendChild(wrapper);
-    card.appendChild(legend);
     this.appendChild(card);
 
     this._updateDateDisplay(this._currentDateSv());
+    await pspWaitFrame();
+    await pspWaitFrame();
     await this._buildChart();
   }
 
@@ -227,15 +215,34 @@ class PspHistoryCard extends HTMLElement {
     var colors = vals.map(pspColorFor);
     var opts = {
       series: [{ name: 'c/kWh', data: vals }],
-      chart: { type: 'bar', height: 260, toolbar: { show: false }, background: 'transparent', animations: { enabled: false }, foreColor: 'var(--primary-text-color)' },
+      chart: {
+        type: 'bar',
+        height: 300,
+        toolbar: { show: false },
+        background: 'transparent',
+        animations: { enabled: false },
+        foreColor: 'var(--primary-text-color)',
+      },
       colors: colors.length ? colors : ['#16a34a'],
       plotOptions: { bar: { columnWidth: '85%', borderRadius: 2, distributed: true } },
       dataLabels: { enabled: false },
       legend: { show: false },
-      xaxis: { categories: PSP_HL, labels: { style: { fontSize: '10px', colors: Array(24).fill('var(--secondary-text-color)') } }, axisBorder: { show: false }, axisTicks: { show: false } },
-      yaxis: { min: 0, decimalsInFloat: 1, labels: { style: { fontSize: '10px', colors: ['var(--secondary-text-color)'] } } },
-      grid: { borderColor: 'rgba(128,128,128,0.15)', padding: { left: 0, right: 8, bottom: 4 } },
+      xaxis: {
+        categories: PSP_HL,
+        labels: { style: { fontSize: '10px' } },
+        axisBorder: { show: false },
+        axisTicks: { show: false },
+      },
+      yaxis: { min: 0, decimalsInFloat: 1 },
+      grid: { strokeDashArray: 4, padding: { bottom: 24 } },
       tooltip: { theme: 'dark', y: { formatter: function(v) { return v.toFixed(2) + ' c/kWh'; } } },
+      annotations: { texts: [{
+        x: '50%',
+        y: 300,
+        text: '\uD83D\uDFE9 <2\u00A2 | \uD83D\uDFE8 2-8\u00A2 | \uD83D\uDFE7 8-12\u00A2 | \uD83D\uDFE5 >12\u00A2',
+        textAnchor: 'middle',
+        style: { fontSize: '11px', color: 'var(--primary-text-color)', background: 'transparent' },
+      }]},
       theme: { mode: 'dark' },
     };
     if (this._chart) { this._chart.destroy(); this._chart = null; }
