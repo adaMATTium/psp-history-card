@@ -208,11 +208,14 @@ class PspHistoryCard extends HTMLElement {
     nav.appendChild(dateInput);
     nav.appendChild(nextBtn);
 
+    // 300px chart + ~10px buffer so the legend annotation's emoji descenders
+    // (rendered at y=300 in the SVG with overflow:visible) stay inside the
+    // wrapper instead of getting clipped by ha-card's overflow:hidden.
     var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:relative;width:100%;min-height:300px;overflow:visible';
+    wrapper.style.cssText = 'position:relative;width:100%;min-height:310px;overflow:visible';
 
     this._chartEl = document.createElement('div');
-    this._chartEl.style.cssText = 'width:100%;min-height:300px;overflow:visible;transition:opacity 0.2s';
+    this._chartEl.style.cssText = 'width:100%;min-height:310px;overflow:visible;transition:opacity 0.2s';
 
     this._overlayEl = document.createElement('div');
     this._overlayEl.style.cssText = 'display:none;position:absolute;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center;font-size:13px;color:var(--primary-text-color);pointer-events:none';
