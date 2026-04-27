@@ -8,14 +8,16 @@
  *   title:    card title (default: "PSP Price History")
  */
 
-function pspColorFor(v) {
-  return v >= 12 ? '#dc2626' : v >= 8 ? '#f97316' : v >= 2 ? '#ffc000' : '#16a34a';
-}
-
-var PSP_HL = ['12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a',
-              '12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p','12a'];
-
 var PSP_LEGEND_TEXT = '🟩 <2¢ | 🟨 2-8¢ | 🟧 8–12¢ | 🟥 >12¢';
+
+// Color ranges mirror the apexcharts-card `color_threshold` config used on the
+// "Today" card so bars are colored by value, not by index.
+var PSP_COLOR_RANGES = [
+  { from: 0,    to: 1.999,  color: '#16a34a' },
+  { from: 2,    to: 7.999,  color: '#ffc000' },
+  { from: 8,    to: 11.999, color: '#f97316' },
+  { from: 12,   to: 1000,   color: '#dc2626' },
+];
 
 function pspWaitApex(ms) {
   return new Promise(function(res, rej) {
@@ -85,17 +87,22 @@ class PspHistoryCard extends HTMLElement {
     return (s && s.state) || pspTodaySv();
   }
 
+  _dayBaseMs(sv) {
+    // Local-midnight epoch ms for the given YYYY-MM-DD string.
+    return new Date(sv + 'T00:00:00').getTime();
+  }
+
   _vals() {
     var s = this._hass && this._hass.states[this._config.sensor];
     var d = s && s.attributes && s.attributes.hourlyPriceDetails;
     if (!d || !d.length) return [];
     var sorted = d.slice().sort(function(a, b) { return parseInt(a.hour) - parseInt(b.hour); });
-    var vals = sorted.map(function(i) {
-      return parseFloat((parseFloat(i.price || 0) * 100).toFixed(2));
+    var base = this._dayBaseMs(this._currentDateSv());
+    return sorted.map(function(i) {
+      var hour = parseInt(i.hour);
+      var price = parseFloat((parseFloat(i.price || 0) * 100).toFixed(2));
+      return [base + hour * 3600000, price];
     });
-    // Pad to 25 entries so x-axis can show the trailing 12a label without an extra bar.
-    vals.push(null);
-    return vals;
   }
 
   async _setDate(sv) {
@@ -187,10 +194,10 @@ class PspHistoryCard extends HTMLElement {
     nav.appendChild(nextBtn);
 
     var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:relative;width:100%;min-height:330px';
+    wrapper.style.cssText = 'position:relative;width:100%;min-height:300px;overflow:visible';
 
     this._chartEl = document.createElement('div');
-    this._chartEl.style.cssText = 'width:100%;min-height:330px;transition:opacity 0.2s';
+    this._chartEl.style.cssText = 'width:100%;min-height:300px;overflow:visible;transition:opacity 0.2s';
 
     this._overlayEl = document.createElement('div');
     this._overlayEl.style.cssText = 'display:none;position:absolute;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center;font-size:13px;color:var(--primary-text-color);pointer-events:none';
@@ -217,7 +224,7 @@ class PspHistoryCard extends HTMLElement {
     if (!this._chartEl) return;
     this._chartReady = false;
     var vals = this._vals();
-    var colors = vals.map(pspColorFor);
+    var base = this._dayBaseMs(this._currentDateSv());
     var opts = {
       series: [{ name: 'c/kWh', data: vals }],
       chart: {
@@ -227,36 +234,34 @@ class PspHistoryCard extends HTMLElement {
         background: 'transparent',
         animations: { enabled: false },
       },
-      colors: colors.length ? colors : ['#16a34a'],
-      plotOptions: { bar: { columnWidth: '85%', borderRadius: 2, distributed: true } },
-      fill: { opacity: 1 },
-      states: {
-        normal: { filter: { type: 'none' } },
-        hover: { filter: { type: 'none' } },
-        active: { filter: { type: 'none' } },
+      plotOptions: {
+        bar: {
+          columnWidth: '85%',
+          borderRadius: 2,
+          colors: { ranges: PSP_COLOR_RANGES },
+        },
       },
       dataLabels: { enabled: false },
       legend: { show: false },
       xaxis: {
-        categories: PSP_HL,
-        labels: { style: { fontSize: '10px' } },
-        axisBorder: { show: false },
-        axisTicks: { show: false },
+        type: 'datetime',
+        min: base,
+        max: base + 24 * 3600000,
+        labels: {
+          datetimeUTC: false,
+          format: 'htt',
+          style: { fontSize: '10px' },
+        },
       },
-      yaxis: {
-        min: 0,
-        labels: { formatter: function(v) { return v.toFixed(1); } },
-      },
-      grid: { strokeDashArray: 4, padding: { bottom: 24 } },
-      tooltip: { theme: 'dark', y: { formatter: function(v) { return v == null ? '' : v.toFixed(2) + ' c/kWh'; } } },
+      yaxis: { min: 0, decimalsInFloat: 1 },
+      grid: { padding: { bottom: 24 } },
       annotations: { texts: [{
         x: '50%',
         y: 300,
         text: PSP_LEGEND_TEXT,
         textAnchor: 'middle',
-        style: { fontSize: '12px', color: 'var(--primary-text-color)', background: 'transparent' },
+        style: { fontSize: '11px', color: 'var(--primary-text-color)', background: 'transparent' },
       }]},
-      theme: { mode: 'dark' },
     };
     if (this._chart) { this._chart.destroy(); this._chart = null; }
     this._chart = new Apex(this._chartEl, opts);
@@ -269,9 +274,14 @@ class PspHistoryCard extends HTMLElement {
     this._updateDateDisplay(this._currentDateSv());
     if (!this._chart || !this._chartReady) return;
     var vals = this._vals();
-    var colors = vals.map(pspColorFor);
+    var base = this._dayBaseMs(this._currentDateSv());
     try {
-      this._chart.updateOptions({ colors: colors.length ? colors : ['#16a34a'], series: [{ data: vals }] }, false, false);
+      // Update both the data and the x-axis window so navigating to a different
+      // day re-anchors the 12a→12a span.
+      this._chart.updateOptions({
+        series: [{ data: vals }],
+        xaxis: { min: base, max: base + 24 * 3600000 },
+      }, false, false);
     } catch (e) {
       this._chartReady = false;
       this._buildChart();
