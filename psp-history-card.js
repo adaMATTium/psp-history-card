@@ -139,6 +139,21 @@ class PspHistoryCard extends HTMLElement {
     var card = document.createElement('ha-card');
     card.style.cssText = 'display:block;padding:12px 16px 10px';
 
+    // Scoped CSS overrides. ApexCharts' option-based styling (strokeDashArray,
+    // fill.opacity, theme.mode) is unreliable inside HA — these rules force the
+    // visuals to match the apexcharts-card "Today" tile.
+    var style = document.createElement('style');
+    style.textContent = [
+      'psp-history-card .apexcharts-text,',
+      'psp-history-card .apexcharts-yaxis text,',
+      'psp-history-card .apexcharts-xaxis text { fill: var(--primary-text-color) !important; }',
+      'psp-history-card .apexcharts-gridline { stroke-dasharray: 4 !important; }',
+      'psp-history-card .apexcharts-bar-area,',
+      'psp-history-card .apexcharts-area-series .apexcharts-area,',
+      'psp-history-card .apexcharts-series path { fill-opacity: 1 !important; }',
+    ].join(' ');
+    card.appendChild(style);
+
     var titleEl = document.createElement('div');
     titleEl.style.cssText = 'font-size:14px;font-weight:600;color:var(--primary-text-color);margin-bottom:10px';
     titleEl.textContent = this._config.title;
