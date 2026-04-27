@@ -208,14 +208,13 @@ class PspHistoryCard extends HTMLElement {
     nav.appendChild(dateInput);
     nav.appendChild(nextBtn);
 
-    // 300px chart + ~10px buffer so the legend annotation's emoji descenders
-    // (rendered at y=300 in the SVG with overflow:visible) stay inside the
-    // wrapper instead of getting clipped by ha-card's overflow:hidden.
+    // Container matches chart.height (305) — no extra buffer needed because
+    // the SVG itself is now tall enough to hold the legend.
     var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:relative;width:100%;min-height:310px;overflow:visible';
+    wrapper.style.cssText = 'position:relative;width:100%;min-height:305px';
 
     this._chartEl = document.createElement('div');
-    this._chartEl.style.cssText = 'width:100%;min-height:310px;overflow:visible;transition:opacity 0.2s';
+    this._chartEl.style.cssText = 'width:100%;min-height:305px;transition:opacity 0.2s';
 
     this._overlayEl = document.createElement('div');
     this._overlayEl.style.cssText = 'display:none;position:absolute;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center;font-size:13px;color:var(--primary-text-color);pointer-events:none';
@@ -246,8 +245,11 @@ class PspHistoryCard extends HTMLElement {
     var opts = {
       series: [{ name: 'c/kWh', data: vals }],
       chart: {
+        // 305px (not 300) so the SVG itself is tall enough to contain the
+        // emoji descenders of the legend annotation rendered at y=300.
+        // Verified in DevTools that 305 fixes the clipping.
         type: 'bar',
-        height: 300,
+        height: 305,
         toolbar: { show: false },
         background: 'transparent',
         animations: { enabled: false },
