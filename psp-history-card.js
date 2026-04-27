@@ -241,6 +241,15 @@ class PspHistoryCard extends HTMLElement {
           colors: { ranges: PSP_COLOR_RANGES },
         },
       },
+      // apexcharts-card sets these implicitly; for raw ApexCharts we need them
+      // explicit so bars stay opaque (grid behind, not through) and HA theme
+      // hover/focus tints don't desaturate them.
+      fill: { opacity: 1 },
+      states: {
+        normal: { filter: { type: 'none' } },
+        hover: { filter: { type: 'none' } },
+        active: { filter: { type: 'none' } },
+      },
       dataLabels: { enabled: false },
       legend: { show: false },
       xaxis: {
@@ -254,7 +263,7 @@ class PspHistoryCard extends HTMLElement {
         },
       },
       yaxis: { min: 0, decimalsInFloat: 1 },
-      grid: { padding: { bottom: 24 } },
+      grid: { strokeDashArray: 4, padding: { bottom: 24 } },
       annotations: { texts: [{
         x: '50%',
         y: 300,
@@ -262,6 +271,7 @@ class PspHistoryCard extends HTMLElement {
         textAnchor: 'middle',
         style: { fontSize: '11px', color: 'var(--primary-text-color)', background: 'transparent' },
       }]},
+      theme: { mode: 'dark' },
     };
     if (this._chart) { this._chart.destroy(); this._chart = null; }
     this._chart = new Apex(this._chartEl, opts);
